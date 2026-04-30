@@ -1,0 +1,22 @@
+{
+  "name": "f2m/php",
+  "description": "Form mail script refactoring for PHP 8.2.",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "phpmailer/phpmailer": "^6.9",
+    "smarty/smarty": "^5.0"
+  },
+  "autoload": {
+    "files": [
+      "src/Config/load.php",
+      "src/Request/build.php",
+      "src/Validation/validate.php",
+      "src/Mail/send.php",
+      "src/Csv/write.php",
+      "src/File/upload.php",
+      "src/Render/render.php"
+    ]
+  }
+}

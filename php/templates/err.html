@@ -1,0 +1,41 @@
+<HTML>
+<HEAD>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<TITLE>メール送信エラー</TITLE>
+</HEAD>
+<body bgcolor="#FFFFFF">
+<form action="<!--{$smarty.server.SCRIPT_NAME|escape}-->" method="post">
+<input type="hidden" name="mode" value="form" />
+<input type="hidden" name="F2M_ID" value="<!--{$send.F2M_ID|escape}-->" />
+<div align="center">
+  <table width=500 cellpadding=3 cellspacing=2>
+    <tr> 
+      <td> 
+        <p><font size="4"><font size="5" color="#666666">入力内容に不備があります</font></font></p>
+        <p><font size="2">以下の項目にエラーがあります。<br>
+          ブラウザの [戻る] ボタンで戻って再入力してください。 </font></p>
+      </td>
+    </tr>
+  </table>
+  <table width="500" border="0" cellspacing="0" cellpadding="0">
+    <tr> 
+      <td bgcolor="#000000"> 
+        <table width=500 cellpadding=3 cellspacing=1 border=0>
+<!--{foreach from=$err item=e  }-->
+				<tr>
+					<td bgcolor="#CCCCCC"><!--{$e.fld|escape:html}--></td>
+					<td bgcolor="#FFFFFF"><!--{$e.errmes|escape:html}--></td>
+				</tr>
+<!--{/foreach}-->
+        </table>
+      </td>
+    </tr>
+  </table>
+</div>
+<p align="center">  
+<p align="center"> 
+<input type="submit"  value="戻る" name="F2M_RET">
+<p align="center"> </p>
+</BODY>
+</HTML>
+

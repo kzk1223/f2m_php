@@ -33,17 +33,14 @@ Desktop.ini
 # Runtime generated files
 # ---------------------------------------------
 /php/var/cache/*
-/php/var/logs/*
 /php/var/uploads/*
 !/php/var/cache/.gitkeep
-!/php/var/logs/.gitkeep
 !/php/var/uploads/.gitkeep
 
 # ---------------------------------------------
 # Legacy / generated outputs
 # ---------------------------------------------
 /mail.csv
-*.log
 *.tmp
 *.bak
 
@@ -52,3 +49,4 @@ Desktop.ini
 
 # docs はドキュメント生成の出力先であるため、Git 管理対象外とする
 /docs/
+/*.url
