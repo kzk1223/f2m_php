@@ -1,0 +1,54 @@
+# ---------------------------------------------
+# OS / editor
+# ---------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------
+# Local environment
+# ---------------------------------------------
+.env
+.env.*
+!.env.example
+
+# 設置先ごとの設定ファイル
+/f2m_conf.txt
+!/f2m_conf.example.txt
+
+# ---------------------------------------------
+# Composer
+# ---------------------------------------------
+/php/vendor/
+/php/auth.json
+
+# composer.lock は再現性確保のため Git 管理対象
+
+# ---------------------------------------------
+# Runtime generated files
+# ---------------------------------------------
+/php/var/cache/*
+/php/var/logs/*
+/php/var/uploads/*
+!/php/var/cache/.gitkeep
+!/php/var/logs/.gitkeep
+!/php/var/uploads/.gitkeep
+
+# ---------------------------------------------
+# Legacy / generated outputs
+# ---------------------------------------------
+/mail.csv
+*.log
+*.tmp
+*.bak
+
+# 旧版一式
+/_old/
+
+# docs はドキュメント生成の出力先であるため、Git 管理対象外とする
+/docs/
