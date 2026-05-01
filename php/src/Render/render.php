@@ -15,7 +15,7 @@ use RuntimeException;
  * @param string $pageType 表示画面種別。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
- * @param array<int, array<string, string>> $errors エラー表示用配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
  * @return void
  * @throws RuntimeException 画面種別またはSmarty利用に失敗した場合。
@@ -140,7 +140,7 @@ function display_template(array $config, string $templatePath, array $assignedVa
  * @param string $templatePath 入力画面テンプレートパス。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
- * @param array<int, array<string, string>> $errors エラー表示用配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @return void
  * @throws RuntimeException Smarty利用に失敗した場合。
  */
@@ -270,7 +270,7 @@ function form_rows(array $config, array $request): array
  *
  * @param string $html 入力画面HTML。
  * @param array<string, mixed> $formFields フォーム復元値。
- * @param array<int, array<string, string>> $errors エラー表示用配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @return string フォーム値反映済みHTML。
  * @throws RuntimeException DOM拡張が利用できない場合。
@@ -316,7 +316,7 @@ function apply_form_values(string $html, array $formFields, array $errors = [], 
  *
  * @param \DOMDocument $document HTML DOM。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
- * @param array<int, array<string, string>> $errors エラー表示用配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @return void
  */
 function apply_form_errors(\DOMDocument $document, array $config, array $errors): void
@@ -341,7 +341,7 @@ function apply_form_errors(\DOMDocument $document, array $config, array $errors)
  * フォーム先頭へエラー概要を挿入。
  *
  * @param \DOMDocument $document HTML DOM。
- * @param array<int, array<string, string>> $errors エラー表示用配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @return void
  */
 function inject_error_summary(\DOMDocument $document, array $errors): void
@@ -441,7 +441,7 @@ function form_control_elements(\DOMDocument $document): array
  * エラー配列をフォーム項目名単位へ変換。
  *
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
- * @param array<int, array<string, string>> $errors エラー表示用配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @return array<string, array<int, string>> 項目別エラー配列。
  */
 function field_error_messages(array $config, array $errors): array
@@ -453,12 +453,9 @@ function field_error_messages(array $config, array $errors): array
     // 項目名別エラー変換
     // ---------------------------------------------
     foreach ($errors as $error) {
-        $fieldLabels = array_map('trim', explode(',', (string)($error['fld'] ?? '')));
         $errorMessage = (string)($error['errmes'] ?? '');
 
-        foreach ($fieldLabels as $fieldLabel) {
-            $fieldName = (string)($fieldLabelMap[$fieldLabel] ?? '');
-
+        foreach (error_field_names($error, $fieldLabelMap) as $fieldName) {
             if ($fieldName === '' || $errorMessage === '') {
                 continue;
             }
@@ -468,6 +465,47 @@ function field_error_messages(array $config, array $errors): array
     }
 
     return $fieldErrorMessages;
+}
+
+/**
+ * エラー配列から紐づけ対象のフォーム項目名を取得。
+ *
+ * @param array<string, mixed> $error エラー表示用配列。
+ * @param array<string, string> $fieldLabelMap 表示用項目名をキーにしたフォーム項目名配列。
+ * @return array<int, string> フォーム項目名配列。
+ */
+function error_field_names(array $error, array $fieldLabelMap): array
+{
+    // ---------------------------------------------
+    // フォーム項目名優先取得
+    // ---------------------------------------------
+    if (isset($error['fields']) && is_array($error['fields'])) {
+        return array_values(array_filter(
+            array_map(
+                static fn (mixed $fieldName): string => normalized_field_name(trim((string)$fieldName)),
+                $error['fields']
+            ),
+            static fn (string $fieldName): bool => $fieldName !== ''
+        ));
+    }
+
+    $fieldNames = [];
+    $fieldLabels = array_map('trim', explode(',', (string)($error['fld'] ?? '')));
+
+    // ---------------------------------------------
+    // 表示用項目名フォールバック
+    // ---------------------------------------------
+    foreach ($fieldLabels as $fieldLabel) {
+        $fieldName = (string)($fieldLabelMap[$fieldLabel] ?? '');
+
+        if ($fieldName === '') {
+            continue;
+        }
+
+        $fieldNames[] = normalized_field_name($fieldName);
+    }
+
+    return array_values(array_unique($fieldNames));
 }
 
 /**

@@ -13,7 +13,7 @@ namespace F2m\Validation;
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
  * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
- * @return array<int, array{fld: string, errmes: string}> エラー表示用配列。
+ * @return array<int, array{fields?: array<int, string>, fld: string, errmes: string}> エラー表示用配列。
  */
 function validate(array $config, array $request, array $uploadedFiles = []): array
 {
@@ -35,6 +35,7 @@ function validate(array $config, array $request, array $uploadedFiles = []): arr
     foreach (($config['F2M_JPNAME'] ?? []) as $fieldName => $fieldLabel) {
         if (isset($config['F2M_CHK'][$fieldName]) && is_blank_field($fieldName, $formFields, $request)) {
             $errors[] = [
+                'fields' => [(string)$fieldName],
                 'fld' => $fieldLabel,
                 'errmes' => file_required_error($fieldName, $request)
                     ? 'ファイル選択がされていないか、データ容量オーバーのため受信できません。'
@@ -46,6 +47,7 @@ function validate(array $config, array $request, array $uploadedFiles = []): arr
         if (isset($config['F2M_CHK_EMAIL'][$fieldName]) && ($formFields[$fieldName] ?? '') !== '') {
             if (!is_email((string)$formFields[$fieldName])) {
                 $errors[] = [
+                    'fields' => [(string)$fieldName],
                     'fld' => $fieldLabel,
                     'errmes' => '形式が不正です',
                 ];
@@ -66,6 +68,7 @@ function validate(array $config, array $request, array $uploadedFiles = []): arr
 
         if (($formFields[$firstField] ?? '') !== ($formFields[$secondField] ?? '')) {
             $errors[] = [
+                'fields' => [$firstField, $secondField],
                 'fld' => field_label($firstField, $config) . ',' . field_label($secondField, $config),
                 'errmes' => '一致しません',
             ];
@@ -82,6 +85,7 @@ function validate(array $config, array $request, array $uploadedFiles = []): arr
 
         if (is_array($uploadedFile) && (int)($uploadedFile['size'] ?? 0) > $maxFileSize) {
             $errors[] = [
+                'fields' => [$fieldName],
                 'fld' => field_label($fieldName, $config),
                 'errmes' => sprintf('容量オーバー(%sByteまで)', $config['F2M_ATTACH_MAX'] ?? '3M'),
             ];
