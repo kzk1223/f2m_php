@@ -84,7 +84,7 @@ try {
     $errors = \F2m\Validation\validate($config, $request);
 
     if ($errors !== []) {
-        \F2m\Render\render('error', $config, $request, $errors);
+        \F2m\Render\render('form', $config, $request, $errors);
         exit;
     }
 
