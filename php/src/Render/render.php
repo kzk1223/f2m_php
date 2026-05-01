@@ -15,7 +15,7 @@ use RuntimeException;
  * @param string $pageType 表示画面種別。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
- * @param array<int, array<string, string>> $errors エラー表示用配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
  * @return void
  * @throws RuntimeException 画面種別またはSmarty利用に失敗した場合。
@@ -33,7 +33,7 @@ function render(
     // 入力画面表示
     // ---------------------------------------------
     if ($pageType === 'form') {
-        display_form($templatePath, $config, $request);
+        display_form($templatePath, $config, $request, $errors);
         return;
     }
 
@@ -140,10 +140,11 @@ function display_template(array $config, string $templatePath, array $assignedVa
  * @param string $templatePath 入力画面テンプレートパス。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @return void
  * @throws RuntimeException Smarty利用に失敗した場合。
  */
-function display_form(string $templatePath, array $config, array $request): void
+function display_form(string $templatePath, array $config, array $request, array $errors = []): void
 {
     // ---------------------------------------------
     // 入力画面HTML生成
@@ -154,7 +155,7 @@ function display_form(string $templatePath, array $config, array $request): void
         'send' => send_values($request),
     ]);
 
-    echo apply_form_values($html, $request['form_fields'] ?? []);
+    echo apply_form_values($html, $request['form_fields'] ?? [], $errors, $config);
 }
 
 /**
@@ -265,19 +266,21 @@ function form_rows(array $config, array $request): array
 }
 
 /**
- * 入力画面HTMLのフォーム要素へ入力値を反映。
+ * 入力画面HTMLのフォーム要素へ入力値とエラー表示を反映。
  *
  * @param string $html 入力画面HTML。
  * @param array<string, mixed> $formFields フォーム復元値。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
+ * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @return string フォーム値反映済みHTML。
  * @throws RuntimeException DOM拡張が利用できない場合。
  */
-function apply_form_values(string $html, array $formFields): string
+function apply_form_values(string $html, array $formFields, array $errors = [], array $config = []): string
 {
     // ---------------------------------------------
-    // 復元値存在判定
+    // 反映値存在判定
     // ---------------------------------------------
-    if ($formFields === []) {
+    if ($formFields === [] && $errors === []) {
         return $html;
     }
 
@@ -303,8 +306,344 @@ function apply_form_values(string $html, array $formFields): string
     apply_input_values($document, $formFields);
     apply_textarea_values($document, $formFields);
     apply_select_values($document, $formFields);
+    apply_form_errors($document, $config, $errors);
 
     return $document->saveHTML();
+}
+
+/**
+ * 入力画面HTMLへエラー概要と項目別エラーを反映。
+ *
+ * @param \DOMDocument $document HTML DOM。
+ * @param array<string, mixed> $config F2M_ID単位の設定配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
+ * @return void
+ */
+function apply_form_errors(\DOMDocument $document, array $config, array $errors): void
+{
+    // ---------------------------------------------
+    // エラー存在判定
+    // ---------------------------------------------
+    if ($errors === []) {
+        return;
+    }
+
+    $fieldErrorMessages = field_error_messages($config, $errors);
+
+    // ---------------------------------------------
+    // エラー表示反映
+    // ---------------------------------------------
+    inject_error_summary($document, $errors);
+    inject_field_errors($document, $fieldErrorMessages);
+}
+
+/**
+ * フォーム先頭へエラー概要を挿入。
+ *
+ * @param \DOMDocument $document HTML DOM。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
+ * @return void
+ */
+function inject_error_summary(\DOMDocument $document, array $errors): void
+{
+    $formElement = $document->getElementsByTagName('form')->item(0);
+
+    if (!$formElement instanceof \DOMElement) {
+        return;
+    }
+
+    // ---------------------------------------------
+    // エラー概要DOM生成
+    // ---------------------------------------------
+    $summaryElement = $document->createElement('div');
+    $summaryElement->setAttribute('class', 'f2m-error-summary');
+    $summaryElement->setAttribute('role', 'alert');
+
+    $messageElement = $document->createElement('p');
+    $messageElement->appendChild($document->createTextNode('入力内容に不備があります。'));
+    $summaryElement->appendChild($messageElement);
+
+    $listElement = $document->createElement('ul');
+
+    foreach ($errors as $error) {
+        $fieldLabel = (string)($error['fld'] ?? '');
+        $errorMessage = (string)($error['errmes'] ?? '');
+
+        $itemElement = $document->createElement('li');
+        $itemElement->appendChild($document->createTextNode(error_text($fieldLabel, $errorMessage)));
+        $listElement->appendChild($itemElement);
+    }
+
+    $summaryElement->appendChild($listElement);
+    $formElement->insertBefore($summaryElement, $formElement->firstChild);
+}
+
+/**
+ * 入力要素の直後へ項目別エラーを挿入。
+ *
+ * @param \DOMDocument $document HTML DOM。
+ * @param array<string, array<int, string>> $fieldErrorMessages 項目別エラー配列。
+ * @return void
+ */
+function inject_field_errors(\DOMDocument $document, array $fieldErrorMessages): void
+{
+    $displayedFieldNames = [];
+
+    // ---------------------------------------------
+    // 項目別エラーDOM生成
+    // ---------------------------------------------
+    foreach (form_control_elements($document) as $controlElement) {
+        $fieldName = normalized_field_name($controlElement->getAttribute('name'));
+
+        if ($fieldName === '' || isset($displayedFieldNames[$fieldName]) || !isset($fieldErrorMessages[$fieldName])) {
+            continue;
+        }
+
+        $errorId = field_error_id($fieldName);
+        $controlElement->setAttribute('aria-invalid', 'true');
+        append_aria_describedby($controlElement, $errorId);
+
+        $errorElement = $document->createElement('p');
+        $errorElement->setAttribute('class', 'f2m-field-error');
+        $errorElement->setAttribute('id', $errorId);
+        $errorElement->appendChild($document->createTextNode(implode(' / ', $fieldErrorMessages[$fieldName])));
+
+        insert_after($controlElement, $errorElement);
+        $displayedFieldNames[$fieldName] = true;
+    }
+}
+
+/**
+ * DOM内のフォーム入力要素を取得。
+ *
+ * @param \DOMDocument $document HTML DOM。
+ * @return array<int, \DOMElement> フォーム入力要素配列。
+ */
+function form_control_elements(\DOMDocument $document): array
+{
+    $controlElements = [];
+
+    // ---------------------------------------------
+    // 入力要素収集
+    // ---------------------------------------------
+    foreach (['input', 'textarea', 'select'] as $tagName) {
+        foreach ($document->getElementsByTagName($tagName) as $controlElement) {
+            if ($controlElement instanceof \DOMElement) {
+                $controlElements[] = $controlElement;
+            }
+        }
+    }
+
+    return $controlElements;
+}
+
+/**
+ * エラー配列をフォーム項目名単位へ変換。
+ *
+ * @param array<string, mixed> $config F2M_ID単位の設定配列。
+ * @param array<int, array<string, mixed>> $errors エラー表示用配列。
+ * @return array<string, array<int, string>> 項目別エラー配列。
+ */
+function field_error_messages(array $config, array $errors): array
+{
+    $fieldErrorMessages = [];
+    $fieldLabelMap = field_label_map($config);
+
+    // ---------------------------------------------
+    // 項目名別エラー変換
+    // ---------------------------------------------
+    foreach ($errors as $error) {
+        $errorMessage = (string)($error['errmes'] ?? '');
+
+        foreach (error_field_names($error, $fieldLabelMap) as $fieldName) {
+            if ($fieldName === '' || $errorMessage === '') {
+                continue;
+            }
+
+            $fieldErrorMessages[$fieldName][] = $errorMessage;
+        }
+    }
+
+    return $fieldErrorMessages;
+}
+
+/**
+ * エラー配列から紐づけ対象のフォーム項目名を取得。
+ *
+ * @param array<string, mixed> $error エラー表示用配列。
+ * @param array<string, string> $fieldLabelMap 表示用項目名をキーにしたフォーム項目名配列。
+ * @return array<int, string> フォーム項目名配列。
+ */
+function error_field_names(array $error, array $fieldLabelMap): array
+{
+    // ---------------------------------------------
+    // フォーム項目名優先取得
+    // ---------------------------------------------
+    if (isset($error['fields']) && is_array($error['fields'])) {
+        return array_values(array_filter(
+            array_map(
+                static fn (mixed $fieldName): string => normalized_field_name(trim((string)$fieldName)),
+                $error['fields']
+            ),
+            static fn (string $fieldName): bool => $fieldName !== ''
+        ));
+    }
+
+    $fieldNames = [];
+    $fieldLabels = array_map('trim', explode(',', (string)($error['fld'] ?? '')));
+
+    // ---------------------------------------------
+    // 表示用項目名フォールバック
+    // ---------------------------------------------
+    foreach ($fieldLabels as $fieldLabel) {
+        $fieldName = (string)($fieldLabelMap[$fieldLabel] ?? '');
+
+        if ($fieldName === '') {
+            continue;
+        }
+
+        $fieldNames[] = normalized_field_name($fieldName);
+    }
+
+    return array_values(array_unique($fieldNames));
+}
+
+/**
+ * 表示用項目名からフォーム項目名へのマップを生成。
+ *
+ * @param array<string, mixed> $config F2M_ID単位の設定配列。
+ * @return array<string, string> 表示用項目名をキーにしたフォーム項目名配列。
+ */
+function field_label_map(array $config): array
+{
+    $fieldLabelMap = [];
+    $fieldLabels = $config['F2M_JPNAME'] ?? [];
+
+    // ---------------------------------------------
+    // 表示用項目名マップ生成
+    // ---------------------------------------------
+    if (!is_array($fieldLabels)) {
+        return $fieldLabelMap;
+    }
+
+    foreach ($fieldLabels as $fieldName => $fieldLabel) {
+        if (!is_scalar($fieldLabel)) {
+            continue;
+        }
+
+        $fieldLabelMap[(string)$fieldLabel] = (string)$fieldName;
+    }
+
+    return $fieldLabelMap;
+}
+
+/**
+ * エラー概要表示用テキストを生成。
+ *
+ * @param string $fieldLabel 表示用項目名。
+ * @param string $errorMessage エラーメッセージ。
+ * @return string エラー概要表示用テキスト。
+ */
+function error_text(string $fieldLabel, string $errorMessage): string
+{
+    // ---------------------------------------------
+    // エラーテキスト生成
+    // ---------------------------------------------
+    if ($fieldLabel === '') {
+        return $errorMessage;
+    }
+
+    if ($errorMessage === '') {
+        return $fieldLabel;
+    }
+
+    return $fieldLabel . ': ' . $errorMessage;
+}
+
+/**
+ * name属性の配列表記を通常項目名へ変換。
+ *
+ * @param string $fieldName フォーム項目名。
+ * @return string 正規化済みフォーム項目名。
+ */
+function normalized_field_name(string $fieldName): string
+{
+    // ---------------------------------------------
+    // 配列表記除去
+    // ---------------------------------------------
+    return str_ends_with($fieldName, '[]')
+        ? substr($fieldName, 0, -2)
+        : $fieldName;
+}
+
+/**
+ * 項目別エラー要素IDを生成。
+ *
+ * @param string $fieldName フォーム項目名。
+ * @return string 項目別エラー要素ID。
+ */
+function field_error_id(string $fieldName): string
+{
+    // ---------------------------------------------
+    // ID生成
+    // ---------------------------------------------
+    $safeFieldName = trim((string)preg_replace('/[^A-Za-z0-9_-]+/', '-', $fieldName), '-');
+
+    if ($safeFieldName === '') {
+        $safeFieldName = md5($fieldName);
+    }
+
+    return 'f2m-error-' . $safeFieldName;
+}
+
+/**
+ * aria-describedbyへ項目別エラーIDを追加。
+ *
+ * @param \DOMElement $controlElement フォーム入力要素。
+ * @param string $errorId 項目別エラー要素ID。
+ * @return void
+ */
+function append_aria_describedby(\DOMElement $controlElement, string $errorId): void
+{
+    $describedByValues = array_filter(
+        preg_split('/\s+/', trim($controlElement->getAttribute('aria-describedby'))) ?: [],
+        static fn (string $describedByValue): bool => $describedByValue !== ''
+    );
+
+    // ---------------------------------------------
+    // 参照ID追加
+    // ---------------------------------------------
+    if (!in_array($errorId, $describedByValues, true)) {
+        $describedByValues[] = $errorId;
+    }
+
+    $controlElement->setAttribute('aria-describedby', implode(' ', $describedByValues));
+}
+
+/**
+ * 指定ノードの直後へノードを挿入。
+ *
+ * @param \DOMElement $targetElement 挿入基準要素。
+ * @param \DOMElement $insertElement 挿入要素。
+ * @return void
+ */
+function insert_after(\DOMElement $targetElement, \DOMElement $insertElement): void
+{
+    $parentElement = $targetElement->parentNode;
+
+    if ($parentElement === null) {
+        return;
+    }
+
+    // ---------------------------------------------
+    // 直後挿入
+    // ---------------------------------------------
+    if ($targetElement->nextSibling !== null) {
+        $parentElement->insertBefore($insertElement, $targetElement->nextSibling);
+        return;
+    }
+
+    $parentElement->appendChild($insertElement);
 }
 
 /**
