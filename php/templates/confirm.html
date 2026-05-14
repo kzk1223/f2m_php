@@ -8,6 +8,9 @@
 <input type="hidden" name="mode" value="send" />
 <input type="hidden" name="csrf_token" value="<!--{$send.csrf_token|escape}-->" />
 <input type="hidden" name="F2M_ID" value="<!--{$send.F2M_ID|escape}-->" />
+<!--{if $send.attach_token|default:'' != ''}-->
+<input type="hidden" name="F2M_ATTACH_TOKEN" value="<!--{$send.attach_token|escape}-->" />
+<!--{/if}-->
   <div align="center">
     <table width=500 cellpadding=3 cellspacing=2>
       <tr> 

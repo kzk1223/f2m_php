@@ -71,20 +71,25 @@ try {
     \F2m\File\refresh_uploads($config);
 
     // ---------------------------------------------
+    // 添付ファイル一時保存
+    // ---------------------------------------------
+    $uploadedFiles = \F2m\File\upload($config, $request);
+
+    // ---------------------------------------------
     // 入力画面復帰
     // ---------------------------------------------
     if ($request['return_requested'] || $request['mode'] === 'form') {
-        \F2m\Render\render('form', $config, $request);
+        \F2m\Render\render('form', $config, $request, [], $uploadedFiles);
         exit;
     }
 
     // ---------------------------------------------
     // 入力値検証
     // ---------------------------------------------
-    $errors = \F2m\Validation\validate($config, $request);
+    $errors = \F2m\Validation\validate($config, $request, $uploadedFiles);
 
     if ($errors !== []) {
-        \F2m\Render\render('form', $config, $request, $errors);
+        \F2m\Render\render('form', $config, $request, $errors, $uploadedFiles);
         exit;
     }
 
@@ -98,14 +103,15 @@ try {
         }
 
         if (!empty($config['F2M_TO'])) {
-            \F2m\Mail\send_admin($config, $request);
+            \F2m\Mail\send_admin($config, $request, $uploadedFiles);
         }
 
         if (isset($config['F2M_RESV_TO_FLD'])) {
-            \F2m\Mail\send_reply($config, $request);
+            \F2m\Mail\send_reply($config, $request, $uploadedFiles);
         }
 
-        \F2m\Csv\write($config, $request);
+        \F2m\Csv\write($config, $request, $uploadedFiles);
+        \F2m\File\discard($config, $request);
         \F2m\Render\render('thanks', $config, $request);
         exit;
     }
@@ -113,8 +119,6 @@ try {
     // ---------------------------------------------
     // 確認画面表示
     // ---------------------------------------------
-    $uploadedFiles = \F2m\File\upload($config, $request);
-
     \F2m\Render\render('confirm', $config, $request, [], $uploadedFiles);
 } catch (Throwable $exception) {
     // ---------------------------------------------

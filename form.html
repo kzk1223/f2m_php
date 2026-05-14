@@ -58,6 +58,12 @@ h1 {
 	margin: 6px 0 0;
 }
 
+.f2m-attached-file {
+	color: #37546b;
+	font-size: 14px;
+	margin: 6px 0 0;
+}
+
 .f2m-honeypot {
 	position: absolute;
 	left: -10000px;
@@ -113,7 +119,7 @@ button {
 <main>
 	<section class="form-panel">
 		<h1>フォーム</h1>
-		<form method="post" action="./f2m.php">
+		<form method="post" action="./f2m.php" enctype="multipart/form-data">
 			<input type="hidden" name="F2M_ID" value="contact">
 			<div class="f2m-honeypot" aria-hidden="true">
 				<label for="website">Webサイト</label>
@@ -134,6 +140,10 @@ button {
 			<div class="field">
 				<label for="contact">お問い合わせ内容</label>
 				<textarea id="contact" name="contact"></textarea>
+			</div>
+			<div class="field">
+				<label for="attach">添付ファイル</label>
+				<input id="attach" type="file" name="attach">
 			</div>
 			<div class="actions">
 				<button type="submit">確認する</button>

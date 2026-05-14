@@ -22,6 +22,7 @@ function build(array $postFields, array $uploadedFiles, array &$sessionValues): 
     // ---------------------------------------------
     $mode = (string)($postFields['mode'] ?? 'confirm');
     $f2mId = (string)($postFields['F2M_ID'] ?? ($sessionValues['F2M_ID'] ?? ''));
+    $attachToken = (string)($postFields['F2M_ATTACH_TOKEN'] ?? '');
     $returnRequested = has_return_request($postFields);
 
     // ---------------------------------------------
@@ -47,6 +48,7 @@ function build(array $postFields, array $uploadedFiles, array &$sessionValues): 
         'form_fields' => $formFields,
         'return_requested' => $returnRequested,
         'csrf_token' => (string)($postFields['csrf_token'] ?? ''),
+        'attach_token' => $attachToken,
     ];
 
     $request['session_values'] =& $sessionValues;
@@ -157,5 +159,6 @@ function is_control_field(string $fieldName): bool
     return $fieldName === 'mode'
         || $fieldName === 'csrf_token'
         || $fieldName === 'F2M_ID'
+        || $fieldName === 'F2M_ATTACH_TOKEN'
         || preg_match('/^F2M_RET/u', $fieldName) === 1;
 }

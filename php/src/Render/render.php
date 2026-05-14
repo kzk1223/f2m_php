@@ -33,7 +33,7 @@ function render(
     // 入力画面表示
     // ---------------------------------------------
     if ($pageType === 'form') {
-        display_form($templatePath, $config, $request, $errors);
+        display_form($templatePath, $config, $request, $errors, $uploadedFiles);
         return;
     }
 
@@ -141,10 +141,17 @@ function display_template(array $config, string $templatePath, array $assignedVa
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
  * @param array<int, array<string, mixed>> $errors エラー表示用配列。
+ * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
  * @return void
  * @throws RuntimeException Smarty利用に失敗した場合。
  */
-function display_form(string $templatePath, array $config, array $request, array $errors = []): void
+function display_form(
+    string $templatePath,
+    array $config,
+    array $request,
+    array $errors = [],
+    array $uploadedFiles = []
+): void
 {
     // ---------------------------------------------
     // 入力画面HTML生成
@@ -155,7 +162,14 @@ function display_form(string $templatePath, array $config, array $request, array
         'send' => send_values($request),
     ]);
 
-    echo apply_form_values($html, $request['form_fields'] ?? [], $errors, $config);
+    echo apply_form_values(
+        $html,
+        $request['form_fields'] ?? [],
+        $errors,
+        $config,
+        $uploadedFiles,
+        (string)($request['attach_token'] ?? '')
+    );
 }
 
 /**
@@ -272,15 +286,24 @@ function form_rows(array $config, array $request): array
  * @param array<string, mixed> $formFields フォーム復元値。
  * @param array<int, array<string, mixed>> $errors エラー表示用配列。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
+ * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
+ * @param string $attachToken attach token。
  * @return string フォーム値反映済みHTML。
  * @throws RuntimeException DOM拡張が利用できない場合。
  */
-function apply_form_values(string $html, array $formFields, array $errors = [], array $config = []): string
+function apply_form_values(
+    string $html,
+    array $formFields,
+    array $errors = [],
+    array $config = [],
+    array $uploadedFiles = [],
+    string $attachToken = ''
+): string
 {
     // ---------------------------------------------
     // 反映値存在判定
     // ---------------------------------------------
-    if ($formFields === [] && $errors === []) {
+    if ($formFields === [] && $errors === [] && $uploadedFiles === []) {
         return $html;
     }
 
@@ -306,9 +329,108 @@ function apply_form_values(string $html, array $formFields, array $errors = [], 
     apply_input_values($document, $formFields);
     apply_textarea_values($document, $formFields);
     apply_select_values($document, $formFields);
+    apply_attached_files($document, $uploadedFiles, $attachToken);
     apply_form_errors($document, $config, $errors);
 
     return $document->saveHTML();
+}
+
+/**
+ * 入力画面HTMLへ保存済み添付ファイル表示とattach tokenを反映。
+ *
+ * @param \DOMDocument $document HTML DOM。
+ * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
+ * @param string $attachToken attach token。
+ * @return void
+ */
+function apply_attached_files(\DOMDocument $document, array $uploadedFiles, string $attachToken): void
+{
+    // ---------------------------------------------
+    // 保存済み添付ファイル存在判定
+    // ---------------------------------------------
+    if ($uploadedFiles === [] || $attachToken === '') {
+        return;
+    }
+
+    ensure_attach_token_input($document, $attachToken);
+
+    // ---------------------------------------------
+    // 添付済みファイル名表示
+    // ---------------------------------------------
+    foreach ($document->getElementsByTagName('input') as $inputElement) {
+        if (!$inputElement instanceof \DOMElement) {
+            continue;
+        }
+
+        $inputType = strtolower($inputElement->getAttribute('type') ?: 'text');
+
+        if ($inputType !== 'file') {
+            continue;
+        }
+
+        $fieldName = normalized_field_name($inputElement->getAttribute('name'));
+        $uploadedFile = $uploadedFiles[$fieldName] ?? null;
+
+        if (!is_array($uploadedFile)) {
+            continue;
+        }
+
+        $fileName = (string)($uploadedFile['name'] ?? '');
+
+        if ($fileName === '') {
+            continue;
+        }
+
+        $attachedElement = $document->createElement('p');
+        $attachedElement->setAttribute('class', 'f2m-attached-file');
+        $attachedElement->appendChild($document->createTextNode('添付済みファイル: ' . $fileName));
+
+        insert_after($inputElement, $attachedElement);
+    }
+}
+
+/**
+ * フォーム内へattach tokenのhidden項目を挿入。
+ *
+ * @param \DOMDocument $document HTML DOM。
+ * @param string $attachToken attach token。
+ * @return void
+ */
+function ensure_attach_token_input(\DOMDocument $document, string $attachToken): void
+{
+    $formElement = $document->getElementsByTagName('form')->item(0);
+
+    if (!$formElement instanceof \DOMElement) {
+        return;
+    }
+
+    // ---------------------------------------------
+    // 既存hidden項目更新
+    // ---------------------------------------------
+    foreach ($document->getElementsByTagName('input') as $inputElement) {
+        if (
+            $inputElement instanceof \DOMElement
+            && $inputElement->getAttribute('name') === 'F2M_ATTACH_TOKEN'
+        ) {
+            $inputElement->setAttribute('value', $attachToken);
+            return;
+        }
+    }
+
+    // ---------------------------------------------
+    // hidden項目挿入
+    // ---------------------------------------------
+    $tokenElement = $document->createElement('input');
+    $tokenElement->setAttribute('type', 'hidden');
+    $tokenElement->setAttribute('name', 'F2M_ATTACH_TOKEN');
+    $tokenElement->setAttribute('value', $attachToken);
+
+    if ($formElement->firstChild !== null) {
+        $formElement->insertBefore($tokenElement, $formElement->firstChild);
+        return;
+    }
+
+    $formElement->appendChild($tokenElement);
 }
 
 /**
@@ -851,7 +973,7 @@ function comparable_values(mixed $fieldValue): array
  *
  * @param array<string, mixed> $request アプリ内リクエスト配列。
  * @param bool $createCsrfToken CSRFトークンを生成する場合はtrue。
- * @return array{csrf_token: string, F2M_ID: mixed} 送信用隠し項目値。
+ * @return array{csrf_token: string, F2M_ID: mixed, attach_token: string} 送信用隠し項目値。
  * @throws \Random\RandomException CSRFトークン生成に失敗した場合。
  */
 function send_values(array $request, bool $createCsrfToken = false): array
@@ -864,6 +986,7 @@ function send_values(array $request, bool $createCsrfToken = false): array
     return [
         'csrf_token' => $createCsrfToken ? csrf_token($sessionValues) : '',
         'F2M_ID' => $request['f2m_id'] ?? '',
+        'attach_token' => (string)($request['attach_token'] ?? ''),
     ];
 }
 

@@ -33,11 +33,11 @@ function validate(array $config, array $request, array $uploadedFiles = []): arr
     // 必須・メール形式検証
     // ---------------------------------------------
     foreach (($config['F2M_JPNAME'] ?? []) as $fieldName => $fieldLabel) {
-        if (isset($config['F2M_CHK'][$fieldName]) && is_blank_field($fieldName, $formFields, $request)) {
+        if (isset($config['F2M_CHK'][$fieldName]) && is_blank_field($fieldName, $formFields, $request, $uploadedFiles)) {
             $errors[] = [
                 'fields' => [(string)$fieldName],
                 'fld' => $fieldLabel,
-                'errmes' => file_required_error($fieldName, $request)
+                'errmes' => file_required_error($fieldName, $request, $uploadedFiles)
                     ? 'ファイル選択がされていないか、データ容量オーバーのため受信できません。'
                     : '入力されていません',
             ];
@@ -82,8 +82,16 @@ function validate(array $config, array $request, array $uploadedFiles = []): arr
 
     foreach (attach_fields($config) as $fieldName) {
         $uploadedFile = $request['uploaded_files'][$fieldName] ?? null;
+        $attachedFile = $uploadedFiles[$fieldName] ?? null;
+        $fileSize = 0;
 
         if (is_array($uploadedFile) && (int)($uploadedFile['size'] ?? 0) > $maxFileSize) {
+            $fileSize = (int)($uploadedFile['size'] ?? 0);
+        } elseif (is_array($attachedFile)) {
+            $fileSize = (int)($attachedFile['size'] ?? 0);
+        }
+
+        if ($fileSize > $maxFileSize) {
             $errors[] = [
                 'fields' => [$fieldName],
                 'fld' => field_label($fieldName, $config),
@@ -176,14 +184,15 @@ function submitted_too_early(array $config, array $request): bool
  * @param string $fieldName 検証対象の項目名。
  * @param array<string, mixed> $formFields フォーム入力値。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
+ * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
  * @return bool 空値または未添付の場合はtrue。
  */
-function is_blank_field(string $fieldName, array $formFields, array $request): bool
+function is_blank_field(string $fieldName, array $formFields, array $request, array $uploadedFiles = []): bool
 {
     // ---------------------------------------------
     // 添付必須判定
     // ---------------------------------------------
-    if (file_required_error($fieldName, $request)) {
+    if (file_required_error($fieldName, $request, $uploadedFiles)) {
         return true;
     }
 
@@ -198,10 +207,18 @@ function is_blank_field(string $fieldName, array $formFields, array $request): b
  *
  * @param string $fieldName 検証対象の項目名。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
+ * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
  * @return bool 添付ファイルのサイズが1バイト未満の場合はtrue。
  */
-function file_required_error(string $fieldName, array $request): bool
+function file_required_error(string $fieldName, array $request, array $uploadedFiles = []): bool
 {
+    // ---------------------------------------------
+    // 保存済み添付ファイル判定
+    // ---------------------------------------------
+    if (isset($uploadedFiles[$fieldName]) && is_array($uploadedFiles[$fieldName])) {
+        return false;
+    }
+
     // ---------------------------------------------
     // アップロードサイズ判定
     // ---------------------------------------------
