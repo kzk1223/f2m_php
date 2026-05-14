@@ -36,7 +36,7 @@ function send_admin(array $config, array $request, array $uploadedFiles = []): v
     $mailer->Subject = (string)($config['F2M_SUBJECT'] ?? '');
     $mailer->Body = mail_body($config, $request, (string)($config['F2M_MAIL_TMPL'] ?? 'php/templates/mail.tpl'));
 
-    add_attachments($mailer, $config, $request);
+    add_attachments($mailer, $config, $request, $uploadedFiles);
     send_mailer($mailer);
 }
 
@@ -169,9 +169,10 @@ function mail_body(array $config, array $request, string $templatePath): string
  * @param PHPMailer $mailer PHPMailerインスタンス。
  * @param array<string, mixed> $config F2M_ID単位の設定配列。
  * @param array<string, mixed> $request アプリ内リクエスト配列。
+ * @param array<string, mixed> $uploadedFiles 保存済み添付ファイル情報。
  * @return void
  */
-function add_attachments(PHPMailer $mailer, array $config, array $request): void
+function add_attachments(PHPMailer $mailer, array $config, array $request, array $uploadedFiles = []): void
 {
     // ---------------------------------------------
     // 添付設定判定
@@ -181,7 +182,9 @@ function add_attachments(PHPMailer $mailer, array $config, array $request): void
     }
 
     $sessionValues = $request['session_values'] ?? [];
-    $attachedFiles = $sessionValues['attach_file'] ?? [];
+    $attachedFiles = $uploadedFiles !== []
+        ? $uploadedFiles
+        : ($sessionValues['attach_file'] ?? []);
 
     // ---------------------------------------------
     // 添付ファイル追加
