@@ -5,6 +5,8 @@
   "license": "proprietary",
   "require": {
     "php": "^8.2",
+    "ext-mbstring": "*",
+    "ext-dom": "*",
     "phpmailer/phpmailer": "^6.9",
     "smarty/smarty": "^5.0"
   },

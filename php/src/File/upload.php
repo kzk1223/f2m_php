@@ -75,7 +75,7 @@ function upload(array $config, array &$request): array
             unset($savedFiles[$fieldName]);
 
             if ((int)($uploadedFile['size'] ?? 0) > 0) {
-                throw new RuntimeException('file upload errorr !!');
+                throw new RuntimeException('file upload error !!');
             }
 
             continue;
@@ -95,7 +95,7 @@ function upload(array $config, array &$request): array
         $storedPath = $uploadDirectory . DIRECTORY_SEPARATOR . $storedName;
 
         if (!move_uploaded_file((string)$uploadedFile['tmp_name'], $storedPath)) {
-            throw new RuntimeException('file upload errorr !!');
+            throw new RuntimeException('file upload error !!');
         }
 
         delete_attached_file($config, $savedFiles[$fieldName] ?? []);
